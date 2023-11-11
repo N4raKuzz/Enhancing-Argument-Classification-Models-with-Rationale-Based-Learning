@@ -1,11 +1,7 @@
 import math
 import os
-from tempfile import TemporaryDirectory
-from typing import Tuple
-
 import torch
 from torch import nn, Tensor
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
 from torch.utils.data import dataset
 
 class InputEmbedding(nn.Module):
@@ -47,9 +43,9 @@ class PositionalEncoding(nn.Module):
         x = x + (self.encoding[:, :seq_len, :])
         return self.dropout(x)
 
-class AddNorm(nn.Module):
+class Normalization(nn.Module):
     def __init__(self, size, eps=1e-6):
-        super(AddNorm, self).__init__()
+        super(Normalization, self).__init__()
         self.eps = eps
         self.norm = nn.LayerNorm(size, eps=eps)
     
@@ -108,3 +104,45 @@ class MultiHeadAttetion(nn.Module):
 
         return multihead
 
+class ResidualConnection(nn.Module):
+
+    def __init__(self, dropout: float) -> None:
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.norm = Normalization()
+
+    def forward(self, x, sublayer):
+        return x + self.dropout(sublayer(self.norm(x))) # Add & Norm
+
+class Encoder(nn.Module):
+
+    def __init__(self, multi_attention_layer, feed_forward, dropout: float) -> None:
+        super().__init__()
+        self.multi_attention_layer = multi_attention_layer
+        self.feed_forward = feed_forward
+        self.ma_rc = ResidualConnection(dropout)  # The first residual connection to do for the multi-attention layer
+        self.ff_rc = ResidualConnection(dropout)  # The second residual connection to do for the multi-attention layer
+
+    def forward(self, x, mask):
+        x = self.ma_rc(x,self.multi_attention_layer(x,x,x,mask))
+        x = self.ff_rc(x,self.feed_forward(x))
+        return x
+    
+# Do not need a decoder block for text classification: Only for model to generate text
+class Decoder(nn.Module):
+
+    def __init__(self, self_attention, cross_attention, feed_forward, dropout: float) -> None:
+        super().__init__()
+        self.self_attention = self_attention
+        self.cross_attention = self_attention
+        self.feed_forward = feed_forward
+        self.sa_rc = ResidualConnection(dropout)  # The first residual connection to do for the self-attention layer
+        self.ca_rc = ResidualConnection(dropout) # The second residual connection to do for the cross-attention layer
+        self.ff_rc = ResidualConnection(dropout)  # The third residual connection to do for the feed-forward layer
+    
+
+    def forward(self, x, encoder_output, src_mask, tgt_mask):
+        x = self.sa_rc(x,self.multi_attention_layer(x,x,x,src_mask))
+        x = self.ca_rc(x,self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
+        x = self.ff_rc(x,self.feed_forward(x))
+        return x
