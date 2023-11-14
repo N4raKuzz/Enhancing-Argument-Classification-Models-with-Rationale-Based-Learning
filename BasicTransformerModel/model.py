@@ -142,7 +142,59 @@ class Decoder(nn.Module):
     
 
     def forward(self, x, encoder_output, src_mask, tgt_mask):
-        x = self.sa_rc(x,self.multi_attention_layer(x,x,x,src_mask))
-        x = self.ca_rc(x,self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
+        x = self.sa_rc(x,lambda x: self.multi_attention_layer(x,x,x,src_mask))
+        x = self.ca_rc(x,lambda x:self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
         x = self.ff_rc(x,self.feed_forward(x))
         return x
+
+class LinearLayer(nn.Module):
+
+    def __init__(self, d_model: int) -> None:
+        super().__init__()
+        self.projection = nn.Linear(d_model,1)
+    
+    def forward(self, x):
+        return torch.log_softmax(self.projection(x), dim = -1)
+    
+
+class Transformer(nn.Module):
+
+    def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbedding, tgt_embed: InputEmbedding, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
+        super().__init__()
+        self.encoder = encoder
+        self.decoder = decoder
+        self.src_embed = src_embed
+        self.tgt_embed = tgt_embed
+        self.src_pos = src_pos
+        self.tgt_pos = tgt_pos
+        self.linear_layer = linear_layer
+
+    def encode(self, src, src_mask):
+        src = self.src_embed(src)
+        src = self.src_pos(src)
+        return self.encoder(src, src_mask)
+    
+    def decode(self, encoder_output: torch.Tensor, src_mask, tgt, tgt_mask):
+        tgt = self.tgt_embed(tgt)
+        tgt = self.tgt_pos(tgt)
+        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+    
+    def linear(self, x):
+        return self.linear_layer(x)
+
+class Transformer4Classification(nn.Module):
+
+    def __init__(self, encoder: Encoder, src_embed: InputEmbedding, src_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
+        super().__init__()
+        self.encoder = encoder
+        self.src_embed = src_embed
+        self.src_pos = src_pos
+        self.linear_layer = linear_layer
+
+    def encode(self, src, src_mask):
+        src = self.src_embed(src)
+        src = self.src_pos(src)
+        return self.encoder(src, src_mask)
+    
+    def linear(self, x):
+        return self.linear_layer(x)
