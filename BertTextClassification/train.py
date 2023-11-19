@@ -3,7 +3,8 @@ import torch
 import pandas as pd
 from torch import nn
 from torch.utils.data import DataLoader
-from transformers import BertTokenizer, get_linear_schedule_with_warmup, AdamW
+from torch.optim import AdamW
+from transformers import BertTokenizer, get_linear_schedule_with_warmup
 from dataset import BERTDataset
 from model import BERTClassifier
 from sklearn.model_selection import train_test_split
@@ -52,7 +53,7 @@ def train(model, data_loader, optimizer, scheduler, device):
         optimizer.step()
         scheduler.step()    
 
-
+#tain on dataset
 texts, labels = load_data(FILE_PATH)
 train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2, random_state=42)
 
@@ -63,6 +64,10 @@ train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True
 val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if (device == 'cuda'):
+        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
+        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
+
 model = BERTClassifier(NUM_CLASS).to(device)
 optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
 total_steps = len(train_dataloader) * NUM_EPOCHS

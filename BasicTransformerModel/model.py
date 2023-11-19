@@ -1,6 +1,7 @@
 import math
 import os
 import torch
+import numpy as np
 from torch import nn, Tensor
 from torch.utils.data import dataset
 
@@ -184,17 +185,50 @@ class Transformer(nn.Module):
 
 class Transformer4Classification(nn.Module):
 
-    def __init__(self, encoder: Encoder, src_embed: InputEmbedding, src_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
+    def __init__(self, encoder: Encoder, src_embed: InputEmbedding, src_pos: PositionalEncoding, linear_layer: LinearLayer, num_classes:int) -> None:
         super().__init__()
         self.encoder = encoder
         self.src_embed = src_embed
         self.src_pos = src_pos
         self.linear_layer = linear_layer
 
+        encoder_dim = 512
+        self.classification_head = nn.Sequential(
+            nn.Linear(encoder_dim, encoder_dim // 2),
+            nn.ReLU(),
+            nn.Linear(encoder_dim // 2, num_classes)
+        )
+
     def encode(self, src, src_mask):
         src = self.src_embed(src)
         src = self.src_pos(src)
         return self.encoder(src, src_mask)
     
+    def forward(self, src, src_mask):
+        # Encoding the source sequence
+        encoded_src = self.encode(src, src_mask)
+
+        # Assuming that the first token of the encoded sequence is used for classification (like [CLS] token in BERT)
+        # You may need to modify this part based on your specific use case
+        cls_token = encoded_src[:, 0, :]
+
+        # Passing the [CLS] token through the linear layer (classification head)
+        output = self.linear_layer(cls_token)
+        return output
+
+    def loss_cross_entropy_softmax(self, x, truth):
+   
+        x_shift = x - np.max(x) # Remove the Xmax to avoid overflow [m,1]
+        x_exp = np.exp(x_shift)
+        y_tilde = x_exp / np.sum(x_exp) 
+        y_log = np.log(y_tilde+1e-9) 
+
+        l = -np.sum(np.multiply(y_log, truth))  # Loss
+        dl_dy_tilde = -np.multiply(1/(y_tilde+1e-9), truth) 
+        dy_dx = -np.dot(y_tilde, y_tilde.T) + np.diag(y_tilde.flatten()) 
+        dl_dx = np.dot(dl_dy_tilde.T, dy_dx) #The loss derivative with respect to x
+
+        return l, dl_dx
+
     def linear(self, x):
         return self.linear_layer(x)
