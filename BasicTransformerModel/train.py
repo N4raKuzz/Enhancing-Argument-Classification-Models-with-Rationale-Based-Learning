@@ -1,19 +1,26 @@
-import os
 import torch
+import os
 import pandas as pd
-from torch import nn
 from torch.utils.data import DataLoader
+from torch import nn
+from torch.optim import Adam
+from model import EncoderClassifierWithBertWeight  # Ensure this is correctly imported
+from transformers import BertTokenizer
 from dataset import TestDataset
-from model import Transformer4Classification
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
-FILE_PATH = "data\icml_imdb_large.csv"
-NUM_CLASS = 2
-MAX_LENGTH = 256
-BATCH_SIZE = 16
-NUM_EPOCHS = 8
-LEARNING_RATE= 2e-5
+# Model parameters
+FILE_PATH = "data\icml_imdb_small.csv"
+NUM_CLASSES = 2  # Number of classes in your classification task
+D_MODEL = 768  # Model dimension
+D_FF = 2048  # Dimension of feed-forward network
+NUM_HEADS = 8  # Number of attention heads
+MAX_LEN = 384  # Maximum sequence length
+V_SIZE = 30000  # Size of vocabulary
+LEARNING_RATE = 2e-5 # Learning Rate
+NUM_EPOCHS = 8 # Number of epochs
+DROPOUT = 0.1 
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))
@@ -37,8 +44,8 @@ def evaluate(model, data_loader, device):
             actual_labels.extend(labels.cpu().tolist())
             
     return accuracy_score(actual_labels, predictions), classification_report(actual_labels, predictions)
-   
-def train(model, data_loader, optimizer, scheduler, device):
+
+def train(model, data_loader, optimizer, device):
     model.train()
     for batch in data_loader:
         optimizer.zero_grad()
@@ -48,30 +55,34 @@ def train(model, data_loader, optimizer, scheduler, device):
         outputs = model(input_ids=input_ids, attention_mask=attention_mask)
         loss = nn.CrossEntropyLoss()(outputs, labels)
         loss.backward()
-        optimizer.step()
-        scheduler.step()    
-
+        optimizer.step()   
 
 texts, labels = load_data(FILE_PATH)
 train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2, random_state=42)
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-train_dataset = BERTDataset(train_texts, train_labels, tokenizer, MAX_LENGTH)
-val_dataset = BERTDataset(val_texts, val_labels, tokenizer, MAX_LENGTH)
-train_dataloader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
+train_dataset = TestDataset(train_texts, train_labels, tokenizer, MAX_LEN)
+val_dataset = TestDataset(val_texts, val_labels, tokenizer, MAX_LEN)
+
+train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=32)
+
+# Initialize model
+model = EncoderClassifierWithBertWeight(NUM_CLASSES, D_MODEL, D_FF, NUM_HEADS, DROPOUT)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = BERTClassifier(NUM_CLASS).to(device)
-optimizer = AdamW(model.parameters(), lr=LEARNING_RATE)
-total_steps = len(train_dataloader) * NUM_EPOCHS
-scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=0, num_training_steps=total_steps)
+if (device == 'cuda'):
+        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
+        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
 
+optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
+# Training Loop
 for epoch in range(NUM_EPOCHS):
     print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
-    train(model, train_dataloader, optimizer, scheduler, device)
+    train(model, train_dataloader, optimizer, device)
     accuracy, report = evaluate(model, val_dataloader, device)
     print(f"Validation Accuracy: {accuracy:.4f}")
     print(report)
 
-torch.save(model.state_dict(), "bert_classifier_imdb_large.pth")
+# Save model
+torch.save(model.state_dict(), 'encoder_classfier_with_bert_weight_imdb_small.pth')

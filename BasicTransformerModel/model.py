@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from torch import nn, Tensor
 from torch.utils.data import dataset
+from transformers import BertModel, BertAttention
 
 class InputEmbedding(nn.Module):
 
@@ -68,16 +69,16 @@ class FeedForward(nn.Module):
     
 class MultiHeadAttetion(nn.Module):
 
-    def __init__(self, d_model: int, head: int, dropout: float) -> None:
+    def __init__(self, d_model: int, head: int, bert_attention: BertAttention, dropout = 0.1) -> None:
         super().__init__()
         self.d_model = d_model
         self.head = head
         assert d_model % head == 0 # d_model has to be divisable by head
 
         self.d_k = d_model // head
-        self.w_q = nn.Linear(d_model,d_model) # Wq Weight for Query
-        self.w_k = nn.Linear(d_model,d_model) # Wk Weight for Key
-        self.w_v = nn.Linear(d_model,d_model) # Wv Weight for Value
+        self.w_q = bert_attention.self.query # Wq Weight for Query
+        self.w_k = bert_attention.self.key # Wk Weight for Key
+        self.w_v = bert_attention.self.value # Wv Weight for Value
         self.w_o = nn.Linear(d_model,d_model) # Wo Weight for Output
 
         self.dropout = nn.Dropout(dropout)
@@ -117,7 +118,7 @@ class ResidualConnection(nn.Module):
 
 class Encoder(nn.Module):
 
-    def __init__(self, multi_attention_layer, feed_forward, dropout: float) -> None:
+    def __init__(self, multi_attention_layer, feed_forward, dropout = 0.1) -> None:
         super().__init__()
         self.multi_attention_layer = multi_attention_layer
         self.feed_forward = feed_forward
@@ -183,21 +184,24 @@ class Transformer(nn.Module):
     def linear(self, x):
         return self.linear_layer(x)
 
-class Transformer4Classification(nn.Module):
+class EncoderClassifierWithBertWeight(nn.Module):
 
-    def __init__(self, encoder: Encoder, src_embed: InputEmbedding, src_pos: PositionalEncoding, linear_layer: LinearLayer, num_classes:int) -> None:
+    def __init__(self, num_classes:int, d_model:int, d_ff:int, num_heads : int = 8, dropout : float = 0.1) -> None:
         super().__init__()
-        self.encoder = encoder
-        self.src_embed = src_embed
-        self.src_pos = src_pos
-        self.linear_layer = linear_layer
+        bert_model = BertModel.from_pretrained('bert-base-uncased')
 
-        encoder_dim = 512
-        self.classification_head = nn.Sequential(
-            nn.Linear(encoder_dim, encoder_dim // 2),
-            nn.ReLU(),
-            nn.Linear(encoder_dim // 2, num_classes)
-        )
+        for i in range(1,10):
+            # Retrieve weights from encoder layer of BERT
+            bert_attention = bert_model.encoder.layer[i].attention
+            
+            mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
+            ff = FeedForward(d_model, d_ff, dropout) # Create FeedForward layer
+            encoder = Encoder(mha, ff, dropout) # Create Encoder
+
+            self.encoders.append(encoder)
+
+        self.classifier = nn.Linear(d_model, num_classes)
+
 
     def encode(self, src, src_mask):
         src = self.src_embed(src)
@@ -205,16 +209,13 @@ class Transformer4Classification(nn.Module):
         return self.encoder(src, src_mask)
     
     def forward(self, src, src_mask):
-        # Encoding the source sequence
-        encoded_src = self.encode(src, src_mask)
+        for encoder in self.encoders:
+            src = encoder(src, src_mask)
 
-        # Assuming that the first token of the encoded sequence is used for classification (like [CLS] token in BERT)
-        # You may need to modify this part based on your specific use case
-        cls_token = encoded_src[:, 0, :]
-
-        # Passing the [CLS] token through the linear layer (classification head)
-        output = self.linear_layer(cls_token)
-        return output
+        # Assuming x is of shape [batch_size, seq_len, d_model]
+        # Use the output from the last token for classification
+        src = self.classifier(src[:, -1, :])
+        return src
 
     def loss_cross_entropy_softmax(self, x, truth):
    
