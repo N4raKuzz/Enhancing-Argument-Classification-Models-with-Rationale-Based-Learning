@@ -1,10 +1,8 @@
 import math
-import os
 import torch
 import numpy as np
 from torch import nn, Tensor
-from torch.utils.data import dataset
-from transformers import BertModel, BertAttention
+from transformers import BertModel
 
 class InputEmbedding(nn.Module):
 
@@ -12,7 +10,6 @@ class InputEmbedding(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.v_size = v_size
-        # Create the embedding layer
         self.embedding = nn.Embedding(v_size,d_model)
 
     def forward(self,x):
@@ -22,27 +19,23 @@ class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model: int, max_len: int, dropout: float, device):
         super(PositionalEncoding, self).__init__()
-        self.d_model = d_model
-        self.max_len = max_len
         self.dropout = nn.Dropout(dropout)
 
         # Matrix of PE
-        self.encoding = torch.zeros(max_len, d_model, device = device)
+        self.encoding = torch.zeros(max_len, d_model).to(device) 
         self.encoding.requires_grad = False
         # Matrix of Position
-        pos = torch.arange(0,max_len,device=device)
-        pos = pos.float().unsqueeze(dim=1)
+        pos = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1).to(device) 
 
-        _2i = torch.arange(0, max_len, step = 2, device = device)
-        self.encoding[:, 0::2] = torch.sin(pos / (10000.0 ** (_2i / d_model)))
-        self.encoding[:, 0::1] = torch.cos(pos / (10000.0 ** (_2i / d_model)))
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)).to(device) 
+        self.encoding[:, 0::2] = torch.sin(pos * div_term)
+        self.encoding[:, 1::2] = torch.cos(pos * div_term)
 
-        self.encoding.unsqueeze(0)
+        self.encoding = self.encoding.unsqueeze(0).transpose(0,1)
         self.register_buffer('pe',self.encoding)
     
     def forward(self, x):
-        batch_size, seq_len = x.size()
-        x = x + (self.encoding[:, :seq_len, :])
+        x = x + (self.encoding[:x.size(0), :])
         return self.dropout(x)
 
 class Normalization(nn.Module):
@@ -69,7 +62,7 @@ class FeedForward(nn.Module):
     
 class MultiHeadAttetion(nn.Module):
 
-    def __init__(self, d_model: int, head: int, bert_attention: BertAttention, dropout = 0.1) -> None:
+    def __init__(self, d_model: int, head: int, bert_attention, dropout = 0.1) -> None:
         super().__init__()
         self.d_model = d_model
         self.head = head
@@ -108,25 +101,25 @@ class MultiHeadAttetion(nn.Module):
 
 class ResidualConnection(nn.Module):
 
-    def __init__(self, dropout: float) -> None:
+    def __init__(self, size: int, dropout: float) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.norm = Normalization()
+        self.norm = Normalization(size)
 
     def forward(self, x, sublayer):
         return x + self.dropout(sublayer(self.norm(x))) # Add & Norm
 
 class Encoder(nn.Module):
 
-    def __init__(self, multi_attention_layer, feed_forward, dropout = 0.1) -> None:
+    def __init__(self, size : int, multi_attention_layer, feed_forward, dropout = 0.1) -> None:
         super().__init__()
         self.multi_attention_layer = multi_attention_layer
         self.feed_forward = feed_forward
-        self.ma_rc = ResidualConnection(dropout)  # The first residual connection to do for the multi-attention layer
-        self.ff_rc = ResidualConnection(dropout)  # The second residual connection to do for the multi-attention layer
+        self.ma_rc = ResidualConnection(size, dropout)  # The first residual connection to do for the multi-attention layer
+        self.ff_rc = ResidualConnection(size, dropout)  # The second residual connection to do for the feed-forward layer
 
-    def forward(self, x, mask):
-        x = self.ma_rc(x,self.multi_attention_layer(x,x,x,mask))
+    def forward(self, x):
+        x = self.ma_rc(x,self.multi_attention_layer(x,x,x,None))
         x = self.ff_rc(x,self.feed_forward(x))
         return x
     
@@ -136,7 +129,7 @@ class Decoder(nn.Module):
     def __init__(self, self_attention, cross_attention, feed_forward, dropout: float) -> None:
         super().__init__()
         self.self_attention = self_attention
-        self.cross_attention = self_attention
+        self.cross_attention = cross_attention
         self.feed_forward = feed_forward
         self.sa_rc = ResidualConnection(dropout)  # The first residual connection to do for the self-attention layer
         self.ca_rc = ResidualConnection(dropout) # The second residual connection to do for the cross-attention layer
@@ -186,31 +179,34 @@ class Transformer(nn.Module):
 
 class EncoderClassifierWithBertWeight(nn.Module):
 
-    def __init__(self, num_classes:int, d_model:int, d_ff:int, num_heads : int = 8, dropout : float = 0.1) -> None:
+    def __init__(self, num_classes:int, d_model:int, d_ff:int, input_embedding : InputEmbedding, positional_encoding : PositionalEncoding, device, num_heads : int = 8, dropout : float = 0.1) -> None:
         super().__init__()
-        bert_model = BertModel.from_pretrained('bert-base-uncased')
+
+        self.device = device
+        self.to(device)
+
+        bert_model = BertModel.from_pretrained('bert-base-uncased').to(device)
+        self.encoders = []
+        self.embed = input_embedding
+        self.pos_enc = positional_encoding
 
         for i in range(1,10):
             # Retrieve weights from encoder layer of BERT
             bert_attention = bert_model.encoder.layer[i].attention
             
-            mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
-            ff = FeedForward(d_model, d_ff, dropout) # Create FeedForward layer
-            encoder = Encoder(mha, ff, dropout) # Create Encoder
+            mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
+            ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
+            encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create Encoder
 
             self.encoders.append(encoder)
 
-        self.classifier = nn.Linear(d_model, num_classes)
-
-
-    def encode(self, src, src_mask):
-        src = self.src_embed(src)
-        src = self.src_pos(src)
-        return self.encoder(src, src_mask)
+        self.classifier = nn.Linear(d_model, num_classes).to(device)
     
-    def forward(self, src, src_mask):
+    def forward(self, src):
+        src = self.embed(src)
+        src = self.pos_enc(src)
         for encoder in self.encoders:
-            src = encoder(src, src_mask)
+            src = encoder(src)
 
         # Assuming x is of shape [batch_size, seq_len, d_model]
         # Use the output from the last token for classification
