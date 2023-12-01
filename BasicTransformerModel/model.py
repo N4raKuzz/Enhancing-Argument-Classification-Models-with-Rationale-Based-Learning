@@ -190,17 +190,24 @@ class EncoderClassifierWithBertWeight(nn.Module):
         self.embed = input_embedding
         self.pos_enc = positional_encoding
 
-        for i in range(1,10):
+        for i in range(11):
             # Retrieve weights from encoder layer of BERT
             bert_attention = bert_model.encoder.layer[i].attention
             
             mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
             ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
             encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create Encoder
-
+            encoder.requires_grad = False  # Freeze layer
             self.encoders.append(encoder)
 
-        self.classifier = nn.Linear(d_model, num_classes).to(device)
+        bert_attention = bert_model.encoder.layer[i]
+        mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
+        ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
+        encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create the 12th layer that trained on
+        self.encoders.append(encoder)
+
+        #self.dense1 = nn.Linear(d_model, num_classes).to(device)
+        self.dense = LinearLayer(d_model).to(device) # Use one dense layer + Softmax
     
     def forward(self, src):
         src = self.embed(src)
@@ -208,9 +215,7 @@ class EncoderClassifierWithBertWeight(nn.Module):
         for encoder in self.encoders:
             src = encoder(src)
 
-        # Assuming x is of shape [batch_size, seq_len, d_model]
-        # Use the output from the last token for classification
-        src = self.classifier(src[:, -1, :])
+        src = self.dense(src[:, -1, :])
         return src
 
     def loss_cross_entropy_softmax(self, x, truth):

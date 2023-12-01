@@ -1,12 +1,12 @@
 name: env
 channels:
-  - pytorch
   - defaults
   - conda-forge
 dependencies:
   - python=3.9
   - numpy
-  - pandas
-  - pytorch 
+  - pandas 
   - transformers
+  - datasets
+  - sklearn
   - torch  
