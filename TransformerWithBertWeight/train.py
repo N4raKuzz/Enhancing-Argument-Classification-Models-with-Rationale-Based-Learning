@@ -4,7 +4,7 @@ import pandas as pd
 from torch.utils.data import DataLoader
 from torch import nn
 from torch.optim import Adam
-from model import EncoderClassifierWithBertWeight, InputEmbedding, PositionalEncoding
+from model import TransformerBertWeight, InputEmbedding, PositionalEncoding
 from transformers import BertTokenizer
 from dataset import TestDataset
 from sklearn.model_selection import train_test_split
@@ -12,14 +12,14 @@ from sklearn.metrics import accuracy_score, classification_report
 
 # Model parameters
 FILE_PATH = "data\icml_imdb_small.csv"
-NUM_CLASSES = 2  # Number of classes in your classification task
+NUM_CLASSES = 2  # Number of classes
 D_MODEL = 768  # Model dimension
 D_FF = 2048  # Dimension of feed-forward network
 NUM_HEADS = 8  # Number of attention heads
 MAX_LEN = 1024  # Maximum sequence length
-V_SIZE = 30000  # Size of vocabulary
-LEARNING_RATE = 2e-5 # Learning Rate
-NUM_EPOCHS = 8 # Number of epochs
+V_SIZE = 20000  # Size of vocabulary
+LEARNING_RATE = 1e-3 # Learning Rate
+NUM_EPOCHS = 1 # Number of epochs
 DROPOUT = 0.1 
 
 def load_data(path):
@@ -75,11 +75,11 @@ train_dataset = TestDataset(train_texts, train_labels, MAX_LEN, tokenizer)
 val_dataset = TestDataset(val_texts, val_labels, MAX_LEN, tokenizer)
 
 # Initialize model
-model = EncoderClassifierWithBertWeight(NUM_CLASSES, D_MODEL, D_FF, input_embedding, positional_encoding, device, num_heads = NUM_HEADS, dropout = DROPOUT)
+model = TransformerBertWeight(NUM_CLASSES, D_MODEL, D_FF, input_embedding, positional_encoding, device, num_heads = NUM_HEADS, dropout = DROPOUT)
 
 # Initializer Dataloader
-train_dataloader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=32)
+train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=16)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 

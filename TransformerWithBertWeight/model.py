@@ -122,25 +122,6 @@ class Encoder(nn.Module):
         x = self.ma_rc(x,self.multi_attention_layer(x,x,x,None))
         x = self.ff_rc(x,self.feed_forward(x))
         return x
-    
-# Do not need a decoder block for text classification: Only for model to generate text
-class Decoder(nn.Module):
-
-    def __init__(self, self_attention, cross_attention, feed_forward, dropout: float) -> None:
-        super().__init__()
-        self.self_attention = self_attention
-        self.cross_attention = cross_attention
-        self.feed_forward = feed_forward
-        self.sa_rc = ResidualConnection(dropout)  # The first residual connection to do for the self-attention layer
-        self.ca_rc = ResidualConnection(dropout) # The second residual connection to do for the cross-attention layer
-        self.ff_rc = ResidualConnection(dropout)  # The third residual connection to do for the feed-forward layer
-    
-
-    def forward(self, x, encoder_output, src_mask, tgt_mask):
-        x = self.sa_rc(x,lambda x: self.multi_attention_layer(x,x,x,src_mask))
-        x = self.ca_rc(x,lambda x:self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
-        x = self.ff_rc(x,self.feed_forward(x))
-        return x
 
 class LinearLayer(nn.Module):
 
@@ -150,34 +131,8 @@ class LinearLayer(nn.Module):
     
     def forward(self, x):
         return torch.log_softmax(self.projection(x), dim = -1)
-    
 
-class Transformer(nn.Module):
-
-    def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbedding, tgt_embed: InputEmbedding, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
-        super().__init__()
-        self.encoder = encoder
-        self.decoder = decoder
-        self.src_embed = src_embed
-        self.tgt_embed = tgt_embed
-        self.src_pos = src_pos
-        self.tgt_pos = tgt_pos
-        self.linear_layer = linear_layer
-
-    def encode(self, src, src_mask):
-        src = self.src_embed(src)
-        src = self.src_pos(src)
-        return self.encoder(src, src_mask)
-    
-    def decode(self, encoder_output: torch.Tensor, src_mask, tgt, tgt_mask):
-        tgt = self.tgt_embed(tgt)
-        tgt = self.tgt_pos(tgt)
-        return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
-    
-    def linear(self, x):
-        return self.linear_layer(x)
-
-class EncoderClassifierWithBertWeight(nn.Module):
+class TransformerBertWeight(nn.Module):
 
     def __init__(self, num_classes:int, d_model:int, d_ff:int, input_embedding : InputEmbedding, positional_encoding : PositionalEncoding, device, num_heads : int = 8, dropout : float = 0.1) -> None:
         super().__init__()
@@ -199,15 +154,15 @@ class EncoderClassifierWithBertWeight(nn.Module):
             encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create Encoder
             encoder.requires_grad = False  # Freeze layer
             self.encoders.append(encoder)
-
-        bert_attention = bert_model.encoder.layer[i]
+                                                                                                                                                                                                                                                                
+        bert_attention = bert_model.encoder.layer[11].attention
         mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
         ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
         encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create the 12th layer that trained on
         self.encoders.append(encoder)
 
         #self.dense1 = nn.Linear(d_model, num_classes).to(device)
-        self.dense = LinearLayer(d_model).to(device) # Use one dense layer + Softmax
+        self.dense = LinearLayer(d_model).to(device)
     
     def forward(self, src):
         src = self.embed(src)
@@ -234,3 +189,50 @@ class EncoderClassifierWithBertWeight(nn.Module):
 
     def linear(self, x):
         return self.linear_layer(x)
+    
+    
+# Do not need a decoder block for text classification: Only for model to generate text
+# class Decoder(nn.Module):
+
+#     def __init__(self, self_attention, cross_attention, feed_forward, dropout: float) -> None:
+#         super().__init__()
+#         self.self_attention = self_attention
+#         self.cross_attention = cross_attention
+#         self.feed_forward = feed_forward
+#         self.sa_rc = ResidualConnection(dropout)  # The first residual connection to do for the self-attention layer
+#         self.ca_rc = ResidualConnection(dropout) # The second residual connection to do for the cross-attention layer
+#         self.ff_rc = ResidualConnection(dropout)  # The third residual connection to do for the feed-forward layer
+    
+
+#     def forward(self, x, encoder_output, src_mask, tgt_mask):
+#         x = self.sa_rc(x,lambda x: self.multi_attention_layer(x,x,x,src_mask))
+#         x = self.ca_rc(x,lambda x:self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
+#         x = self.ff_rc(x,self.feed_forward(x))
+#         return x
+    
+
+# class Transformer(nn.Module):
+
+#     def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbedding, tgt_embed: InputEmbedding, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
+#         super().__init__()
+#         self.encoder = encoder
+#         self.decoder = decoder
+#         self.src_embed = src_embed
+#         self.tgt_embed = tgt_embed
+#         self.src_pos = src_pos
+#         self.tgt_pos = tgt_pos
+#         self.linear_layer = linear_layer
+
+#     def encode(self, src, src_mask):
+#         src = self.src_embed(src)
+#         src = self.src_pos(src)
+#         return self.encoder(src, src_mask)
+    
+#     def decode(self, encoder_output: torch.Tensor, src_mask, tgt, tgt_mask):
+#         tgt = self.tgt_embed(tgt)
+#         tgt = self.tgt_pos(tgt)
+#         return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
+    
+#     def linear(self, x):
+#         return self.linear_layer(x)
+
