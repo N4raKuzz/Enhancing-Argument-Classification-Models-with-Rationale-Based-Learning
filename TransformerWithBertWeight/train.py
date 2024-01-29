@@ -11,7 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # Model parameters
-FILE_PATH = "data\icml_imdb_small.csv"
+FILE_PATH = "data\icml_test.csv"
 NUM_CLASSES = 2  # Number of classes
 D_MODEL = 768  # Model dimension
 D_FF = 2048  # Dimension of feed-forward network
@@ -47,6 +47,7 @@ def evaluate(model, data_loader, device):
 def train(model, data_loader, optimizer, device):
     model.train().to(device)
     for batch in data_loader:
+        print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
         input_ids = batch['input_ids'].to(device)
         labels = batch['label'].to(device)
@@ -61,6 +62,7 @@ train_texts, val_texts, train_labels, val_labels = train_test_split(texts, label
 
 # Initialize device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#device = torch.device("cpu")
 if (device == 'cuda'):
     print(f"Device name: {torch.cuda.get_device_name(device.index)}")
     print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
@@ -73,6 +75,8 @@ tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
 # Initialize dataset
 train_dataset = TestDataset(train_texts, train_labels, MAX_LEN, tokenizer)
 val_dataset = TestDataset(val_texts, val_labels, MAX_LEN, tokenizer)
+print(f"Total training samples: {len(train_dataset)}")
+print(f"Total validation samples: {len(val_dataset)}")
 
 # Initialize model
 model = TransformerBertWeight(NUM_CLASSES, D_MODEL, D_FF, input_embedding, positional_encoding, device, num_heads = NUM_HEADS, dropout = DROPOUT)

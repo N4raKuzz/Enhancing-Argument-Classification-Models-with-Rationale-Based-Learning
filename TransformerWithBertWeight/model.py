@@ -10,10 +10,13 @@ class InputEmbedding(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.v_size = v_size
-        self.embedding = nn.Embedding(v_size,d_model)
+        self.embedding = nn.Embedding(v_size, d_model)
 
     def forward(self,x):
-        return self.embedding(x) * math.sqrt(self.d_model)
+        print(f"Input shape to Embedding: {x.shape}")
+        out = self.embedding(x) * math.sqrt(self.d_model)
+        print(f"Output shape of Embedding: {out.shape}")
+        return out
     
 class PositionalEncoding(nn.Module):
 
@@ -31,11 +34,22 @@ class PositionalEncoding(nn.Module):
         self.encoding[:, 0::2] = torch.sin(pos * div_term)
         self.encoding[:, 1::2] = torch.cos(pos * div_term)
 
-        self.encoding = self.encoding.unsqueeze(0).transpose(0,1)
+        # (1, seq_len 1024, d_model 768)
+        self.encoding = self.encoding.unsqueeze(0) 
         self.register_buffer('pe',self.encoding)
+
+        print(f"Encoding shape initialization: {self.encoding.shape}")
     
     def forward(self, x):
-        x = x + (self.encoding[:x.size(0), :])
+        print(f"Input shape to Encoding: {x.shape}")
+        print(f"The adding pe: {self.encoding[:, :, :]}")
+        device = x.device
+        pe = self.encoding.to(device)
+        pe = pe.repeat(16,1,1)
+        print(f"The adding pe: {pe.shape}")
+        
+        x = torch.add(x, pe)
+        #x = x + (self.encoding[:, :shape[1], :]).requires_grad_(False)
         return self.dropout(x)
 
 class Normalization(nn.Module):
@@ -119,6 +133,7 @@ class Encoder(nn.Module):
         self.ff_rc = ResidualConnection(size, dropout)  # The second residual connection to do for the feed-forward layer
 
     def forward(self, x):
+        print(f"Input shape to Encoder: {x.shape}")
         x = self.ma_rc(x,self.multi_attention_layer(x,x,x,None))
         x = self.ff_rc(x,self.feed_forward(x))
         return x
