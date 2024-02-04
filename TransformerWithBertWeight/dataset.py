@@ -18,12 +18,18 @@ class TestDataset(Dataset):
 
     def __getitem__(self, idx):
 
-        encoded_dict = self.tokenizer.encode_plus(self.texts[idx], padding = 'max_length', truncation = 'longest_first', max_length = self.max_len, return_tensors = 'pt')
-        print(f"Encoded_dict: {encoded_dict}")
-        input_ids = encoded_dict['input_ids'].squeeze(0) 
-        label = self.labels[idx]
-
-        print(f"Returnned Pair: {input_ids.shape} - {label}")
+        # Encode the text
+        encoding = self.tokenizer.encode(self.texts[idx])
+        pad_token_id = self.tokenizer.token_to_id("[PAD]") if self.tokenizer.token_to_id("[PAD]") is not None else 0
+    
+        # Truncate
+        input_ids = encoding.ids[:self.max_len]
+        # Padding
+        padding_length = self.max_len - len(input_ids)
+        input_ids += [pad_token_id] * padding_length
+        input_ids = torch.tensor(input_ids, dtype=torch.int)
+        # Retrieve the label for the current text
+        label = torch.tensor(self.labels[idx], dtype=torch.long)
 
         return {
             "input_ids": input_ids,

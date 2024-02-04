@@ -2,6 +2,7 @@ import math
 import torch
 import numpy as np
 from torch import nn, Tensor
+import torch.nn.functional as F
 from transformers import BertModel
 
 class InputEmbedding(nn.Module):
@@ -10,10 +11,13 @@ class InputEmbedding(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.v_size = v_size
-        self.embedding = nn.Embedding(v_size, d_model)
+        self.embedding = torch.nn.Embedding(v_size, d_model)
 
     def forward(self,x):
         print(f"Input shape to Embedding: {x.shape}")
+        print(f"input:{x}")
+        print(f"Input device {x.device}") 
+        #out = self.embedding(x) * torch.sqrt(torch.Tensor([self.d_model]))
         out = self.embedding(x) * math.sqrt(self.d_model)
         print(f"Output shape of Embedding: {out.shape}")
         return out
@@ -21,35 +25,27 @@ class InputEmbedding(nn.Module):
 class PositionalEncoding(nn.Module):
 
     def __init__(self, d_model: int, max_len: int, dropout: float, device):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(dropout)
-
+        super().__init__()
+        self.dropout = nn.Dropout(dropout).to(device)
         # Matrix of PE
-        self.encoding = torch.zeros(max_len, d_model).to(device) 
+        self.encoding = torch.zeros(max_len, d_model).to(device)
         self.encoding.requires_grad = False
         # Matrix of Position
-        pos = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1).to(device) 
+        pos = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1).to(device)
 
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)).to(device) 
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model)).to(device)
         self.encoding[:, 0::2] = torch.sin(pos * div_term)
         self.encoding[:, 1::2] = torch.cos(pos * div_term)
-
         # (1, seq_len 1024, d_model 768)
         self.encoding = self.encoding.unsqueeze(0) 
-        self.register_buffer('pe',self.encoding)
 
         print(f"Encoding shape initialization: {self.encoding.shape}")
+        print(f"PosEnc device: {self.encoding.device}")
     
     def forward(self, x):
-        print(f"Input shape to Encoding: {x.shape}")
-        print(f"The adding pe: {self.encoding[:, :, :]}")
-        device = x.device
-        pe = self.encoding.to(device)
-        pe = pe.repeat(16,1,1)
-        print(f"The adding pe: {pe.shape}")
-        
-        x = torch.add(x, pe)
-        #x = x + (self.encoding[:, :shape[1], :]).requires_grad_(False)
+        print(f"Input shape to Positional Encoding: {x.shape}")
+        print(f"Input device {x.device}") 
+        x = x + (self.encoding[:, :x.shape[1], :]).requires_grad_(False)
         return self.dropout(x)
 
 class Normalization(nn.Module):
@@ -58,7 +54,7 @@ class Normalization(nn.Module):
         self.eps = eps
         self.norm = nn.LayerNorm(size, eps=eps)
     
-    def forward(self, x, sublayer):       
+    def forward(self, x):       
         return self.norm(x)
 
 class FeedForward(nn.Module):
@@ -71,6 +67,7 @@ class FeedForward(nn.Module):
         self.linear_2 = nn.Linear(d_ff,d_model) #W2 + Bias2
 
     def forward(self, x):
+        print(f"Input {x.shape} to FeedForward Layer")
         #FNN(x) = ReLU(0, xW1 + b1)W2 + b2
         return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
     
@@ -92,6 +89,8 @@ class MultiHeadAttetion(nn.Module):
 
     def forward(self,q,k,v,mask):
 
+        print(f"Query Key and Value:{q.shape} to Multi-head Attention Layer")
+
         batch_size = q.size(0)
         # Apply the linear transformations and split into `head` heads
         query = self.w_q(q).view(batch_size, -1, self.head, self.d_k).transpose(1, 2)
@@ -110,6 +109,8 @@ class MultiHeadAttetion(nn.Module):
         # Multihead(Q,K,V) = Concat(head1...head_n) Wo        
         multihead = (attention_scores @ value).transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
         multihead = self.w_o(multihead)
+
+        print(f"Multi-head Attention output Score: {multihead.shape}")
 
         return multihead
 
@@ -134,8 +135,8 @@ class Encoder(nn.Module):
 
     def forward(self, x):
         print(f"Input shape to Encoder: {x.shape}")
-        x = self.ma_rc(x,self.multi_attention_layer(x,x,x,None))
-        x = self.ff_rc(x,self.feed_forward(x))
+        x = self.ma_rc(x, lambda x: self.multi_attention_layer(x,x,x,None))
+        x = self.ff_rc(x, lambda x: self.feed_forward(x))
         return x
 
 class LinearLayer(nn.Module):
@@ -149,35 +150,32 @@ class LinearLayer(nn.Module):
 
 class TransformerBertWeight(nn.Module):
 
-    def __init__(self, num_classes:int, d_model:int, d_ff:int, input_embedding : InputEmbedding, positional_encoding : PositionalEncoding, device, num_heads : int = 8, dropout : float = 0.1) -> None:
+    def __init__(self, num_classes:int, d_model:int, d_ff:int, input_embedding : InputEmbedding, positional_encoding : PositionalEncoding, num_heads : int = 8, dropout : float = 0.1) -> None:
         super().__init__()
 
-        self.device = device
-        self.to(device)
-
-        bert_model = BertModel.from_pretrained('bert-base-uncased').to(device)
-        self.encoders = []
+        bert_model = BertModel.from_pretrained('bert-base-uncased')
+        self.encoders = nn.ModuleList()
         self.embed = input_embedding
         self.pos_enc = positional_encoding
 
-        for i in range(11):
-            # Retrieve weights from encoder layer of BERT
-            bert_attention = bert_model.encoder.layer[i].attention
+        # for i in range(11):
+        #     # Retrieve weights from encoder layer of BERT
+        #     bert_attention = bert_model.encoder.layer[i].attention
             
-            mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
-            ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
-            encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create Encoder
-            encoder.requires_grad = False  # Freeze layer
-            self.encoders.append(encoder)
+        #     mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
+        #     ff = FeedForward(d_model, d_ff, dropout)# Create FeedForward layer
+        #     encoder = Encoder(d_model, mha, ff, dropout) # Create Encoder
+        #     encoder.requires_grad = False  # Freeze layer
+        #     self.encoders.append(encoder)
                                                                                                                                                                                                                                                                 
         bert_attention = bert_model.encoder.layer[11].attention
-        mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout).to(device) # Create a MultiHeadAttention layer using BERT weights
-        ff = FeedForward(d_model, d_ff, dropout).to(device) # Create FeedForward layer
-        encoder = Encoder(d_model, mha, ff, dropout).to(device) # Create the 12th layer that trained on
+        mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
+        ff = FeedForward(d_model, d_ff, dropout)# Create FeedForward layer
+        encoder = Encoder(d_model, mha, ff, dropout) # Create the 12th layer that trained on
         self.encoders.append(encoder)
 
-        #self.dense1 = nn.Linear(d_model, num_classes).to(device)
-        self.dense = LinearLayer(d_model).to(device)
+        #self.dense1 = nn.Linear(d_model, num_classes)
+        self.dense = LinearLayer(d_model)
     
     def forward(self, src):
         src = self.embed(src)
@@ -189,18 +187,28 @@ class TransformerBertWeight(nn.Module):
         return src
 
     def loss_cross_entropy_softmax(self, x, truth):
-   
-        x_shift = x - np.max(x) # Remove the Xmax to avoid overflow [m,1]
-        x_exp = np.exp(x_shift)
-        y_tilde = x_exp / np.sum(x_exp) 
-        y_log = np.log(y_tilde+1e-9) 
 
-        l = -np.sum(np.multiply(y_log, truth))  # Loss
-        dl_dy_tilde = -np.multiply(1/(y_tilde+1e-9), truth) 
-        dy_dx = -np.dot(y_tilde, y_tilde.T) + np.diag(y_tilde.flatten()) 
-        dl_dx = np.dot(dl_dy_tilde.T, dy_dx) #The loss derivative with respect to x
+        print(f'Calculating loss_cross_entropy_softmax')
+        # Assuming x and truth are PyTorch tensors
+        x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
+        x_exp = torch.exp(x_shift)
+        x_exp_sum = torch.sum(x_exp, dim=1, keepdim=True)  # Sum across columns for each row
+        y_tilde = x_exp / x_exp_sum
+        y_log = torch.log(y_tilde + 1e-9)
 
-        return l, dl_dx
+        l = -torch.sum(truth * y_log)  # Loss
+        # dl_dy_tilde = -truth / (y_tilde + 1e-9)
+        # y_tilde_diag = torch.diag_embed(y_tilde)
+        # dy_dx = -torch.matmul(y_tilde.unsqueeze(2), y_tilde.unsqueeze(1)) + y_tilde_diag
+        # dl_dx = torch.matmul(dl_dy_tilde.unsqueeze(1), dy_dx).squeeze(1)
+
+        return l
+    
+
+    def loss_rationales(self, x, rationale):
+
+        l = 0
+        return l
 
     def linear(self, x):
         return self.linear_layer(x)
