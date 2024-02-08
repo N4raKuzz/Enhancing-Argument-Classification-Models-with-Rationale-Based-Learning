@@ -1,19 +1,11 @@
 import torch
 import os
+import ast
 import pandas as pd
 from torch.utils.data import DataLoader
-from torch import nn
 from torch.optim import Adam
 from model import TransformerBertWeight, InputEmbedding, PositionalEncoding
-from tokenizers import (
-    decoders,
-    models,
-    normalizers,
-    pre_tokenizers,
-    processors,
-    trainers,
-    Tokenizer,
-)
+from transformers import BertTokenizer
 from dataset import TestDataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
@@ -30,13 +22,17 @@ V_SIZE = 20000  # Size of vocabulary
 LEARNING_RATE = 1e-3 # Learning Rate
 NUM_EPOCHS = 1 # Number of epochs
 DROPOUT = 0.1 
+LAMBDA = 1
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))
     df['labels'] = df['labels'].replace(-1, 0)
+    df['rationales'] = df['rationales'].apply(lambda x: ast.literal_eval(x))
+
     texts = df['documents'].tolist()
     labels = df['labels'].tolist()
-    return texts, labels
+    rationales = df['rationale'].tolist()
+    return texts, labels, rationales
 
 def evaluate(model, data_loader, device):
     model.eval()
@@ -58,16 +54,20 @@ def train(model, data_loader, optimizer, device):
     for batch in data_loader:
         print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
+
         input_ids = batch['input_ids'].to(device)
         labels = batch['label'].to(device)
+        #rationale = batch['rationale'].to(device)
+
         outputs = model(input_ids).to(device)
-        loss = model.loss_cross_entropy_softmax(outputs, labels).to(device)
+        #outputs, att_scrores = model(input_ids).to(device)
+        loss = model.loss_cross_entropy_softmax(outputs, labels).to(device) #* (1-LAMBDA) + LAMBDA * model.loss_attention_rationales(att_scrores, rationale)
         loss.backward()
         optimizer.step()   
 
 # Load Data
-texts, labels = load_data(FILE_PATH)
-train_texts, val_texts, train_labels, val_labels = train_test_split(texts, labels, test_size=0.2, random_state=42)
+texts, labels, rationales = load_data(FILE_PATH)
+train_texts, val_texts, train_labels, val_labels, train_rationales, val_rationales = train_test_split(texts, labels, rationales, test_size=0.2, random_state=42)
 
 # Initialize device
 device = torch.device("cuda")# if torch.cuda.is_initialized() else "cpu")
@@ -75,8 +75,11 @@ device = torch.device("cuda")# if torch.cuda.is_initialized() else "cpu")
 print(f"Device name: {torch.cuda.get_device_name(device.index)}")
 print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
 
+
 # Initialize tokenizer
-tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+
+# tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
 # tokenizer = Tokenizer(models.WordPiece(unk_token="[UNK]"))
 # tokenizer.normalizer = normalizers.Sequence(
 #     [normalizers.NFD(), normalizers.Lowercase(), normalizers.StripAccents()]

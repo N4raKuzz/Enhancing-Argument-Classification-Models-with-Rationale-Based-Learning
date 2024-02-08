@@ -182,13 +182,16 @@ class TransformerBertWeight(nn.Module):
         src = self.pos_enc(src)
         for encoder in self.encoders:
             src = encoder(src)
-
+        
+        print(f"Attention Score: {src.shape}")
         src = self.dense(src[:, -1, :])
-        return src
+
+        return src#, attention_score
 
     def loss_cross_entropy_softmax(self, x, truth):
 
-        print(f'Calculating loss_cross_entropy_softmax')
+        print('Calculating loss_cross_entropy_softmax')
+        print(f"output x {x.shape}, truth {truth.shape}")
         # Assuming x and truth are PyTorch tensors
         x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
         x_exp = torch.exp(x_shift)
@@ -197,17 +200,19 @@ class TransformerBertWeight(nn.Module):
         y_log = torch.log(y_tilde + 1e-9)
 
         l = -torch.sum(truth * y_log)  # Loss
-        # dl_dy_tilde = -truth / (y_tilde + 1e-9)
-        # y_tilde_diag = torch.diag_embed(y_tilde)
-        # dy_dx = -torch.matmul(y_tilde.unsqueeze(2), y_tilde.unsqueeze(1)) + y_tilde_diag
-        # dl_dx = torch.matmul(dl_dy_tilde.unsqueeze(1), dy_dx).squeeze(1)
 
         return l
     
+    def loss_attention_rationales(self, x, rationale):
 
-    def loss_rationales(self, x, rationale):
+        print('Calculating loss_attention_rationales')
+        x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
+        x_exp = torch.exp(x_shift)
+        x_exp_sum = torch.sum(x_exp, dim=1, keepdim=True)  # Sum across columns for each row
+        y_tilde = x_exp / x_exp_sum
+        y_log = torch.log(y_tilde + 1e-9)
 
-        l = 0
+        l = -torch.sum(rationale * y_log)  # Loss
         return l
 
     def linear(self, x):
