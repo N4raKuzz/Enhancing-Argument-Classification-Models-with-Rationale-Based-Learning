@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
 
-class TestDataset(Dataset):
+class RationaleDataset(Dataset):
 
     def __init__(self, texts, labels, rationales, max_len : int, tokenizer):
         self.texts = texts
@@ -20,30 +19,22 @@ class TestDataset(Dataset):
     def __getitem__(self, idx):
 
         # Create the rationale mask for the current text
-        rationales = torch.tensor(self.rationales[idx], dtype=torch.int)
-        rationale_mask = self.create_rationale_mask(rationales, input_ids)
+        # print(f"rationale : {self.rationales[idx]} \n")
+        # print(f"text : {self.texts[idx]}")
+        rationale_mask = self.create_rationale_mask(self.rationales[idx], self.texts[idx])
 
         # Encode the text
-        encoding = self.tokenizer.encode(self.texts[idx])
-        pad_token_id = self.tokenizer.token_to_id("[PAD]") if self.tokenizer.token_to_id("[PAD]") is not None else 0
-        # Truncate
-        input_ids = encoding.ids[:self.max_len]
-        # Padding
-        padding_length = self.max_len - len(input_ids)
-
-        input_ids += [pad_token_id] * padding_length
-        input_ids = torch.tensor(input_ids, dtype=torch.int)
-
-        # Retrieve the label for the current text
-        label = torch.tensor(self.labels[idx], dtype=torch.long)
+        encoding  = self.tokenizer(self.texts[idx], padding="max_length", max_length=1024, truncation=True)
+        input_ids = encoding['input_ids']
+        print(f"text : {torch.tensor(input_ids, dtype=torch.int)}")
 
         return {
-            "input_ids": input_ids,
-            "label": label,
-            'rationales': rationale_mask
+            "input_ids": torch.tensor(input_ids, dtype=torch.int),
+            "label": torch.tensor(self.labels[idx], dtype=torch.int),
+            #"rationales": rationale_mask
         }
     
-    def create_rationale_mask(rationales, texts):
+    def create_rationale_mask(self, rationales, texts):
 
         mask = [0] * len(texts)
 

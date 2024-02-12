@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam
 from model import TransformerBertWeight, InputEmbedding, PositionalEncoding
 from transformers import BertTokenizer
-from dataset import TestDataset
+from dataset import RationaleDataset
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
@@ -18,7 +18,7 @@ D_MODEL = 768  # Model dimension
 D_FF = 2048  # Dimension of feed-forward network
 NUM_HEADS = 8  # Number of attention heads
 MAX_LEN = 1024  # Maximum sequence length
-V_SIZE = 20000  # Size of vocabulary
+V_SIZE = 30522  # Size of vocabulary
 LEARNING_RATE = 1e-3 # Learning Rate
 NUM_EPOCHS = 1 # Number of epochs
 DROPOUT = 0.1 
@@ -31,7 +31,8 @@ def load_data(path):
 
     texts = df['documents'].tolist()
     labels = df['labels'].tolist()
-    rationales = df['rationale'].tolist()
+    rationales = df['rationales'].tolist()
+    print(labels)
     return texts, labels, rationales
 
 def evaluate(model, data_loader, device):
@@ -93,8 +94,8 @@ input_embedding = InputEmbedding(D_MODEL, V_SIZE).to(device)
 positional_encoding = PositionalEncoding(D_MODEL, MAX_LEN, DROPOUT,device).to(device)
 
 # Initialize dataset
-train_dataset = TestDataset(train_texts, train_labels, MAX_LEN, tokenizer)
-val_dataset = TestDataset(val_texts, val_labels, MAX_LEN, tokenizer)
+train_dataset = RationaleDataset(train_texts, train_labels, train_rationales, MAX_LEN, tokenizer)
+val_dataset = RationaleDataset(val_texts, val_labels, val_rationales, MAX_LEN, tokenizer)
 print(f"Total training samples: {len(train_dataset)}")
 print(f"Total validation samples: {len(val_dataset)}")
 
