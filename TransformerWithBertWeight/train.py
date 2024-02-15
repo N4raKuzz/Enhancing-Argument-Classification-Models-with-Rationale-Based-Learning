@@ -2,6 +2,7 @@ import torch
 import os
 import ast
 import pandas as pd
+from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import Adam
 from model import TransformerBertWeight, InputEmbedding, PositionalEncoding
@@ -32,7 +33,7 @@ def load_data(path):
     texts = df['documents'].tolist()
     labels = df['labels'].tolist()
     rationales = df['rationales'].tolist()
-    print(labels)
+
     return texts, labels, rationales
 
 def evaluate(model, data_loader, device):
@@ -48,21 +49,23 @@ def evaluate(model, data_loader, device):
             predictions.extend(preds.cpu().tolist())
             actual_labels.extend(labels.cpu().tolist())
             
-    return accuracy_score(actual_labels, predictions), classification_report(actual_labels, predictions)
+    return accuracy_score(actual_labels, predictions), classification_report(actual_labels, predictions, zero_division=0)
 
 def train(model, data_loader, optimizer, device):
     model.train()
+    model = model.to(device)
+
     for batch in data_loader:
         print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
-
         input_ids = batch['input_ids'].to(device)
         labels = batch['label'].to(device)
         #rationale = batch['rationale'].to(device)
-
         outputs = model(input_ids).to(device)
         #outputs, att_scrores = model(input_ids).to(device)
-        loss = model.loss_cross_entropy_softmax(outputs, labels).to(device) #* (1-LAMBDA) + LAMBDA * model.loss_attention_rationales(att_scrores, rationale)
+        L = nn.CrossEntropyLoss()
+        loss = L(outputs, labels)
+        #* (1-LAMBDA) + LAMBDA * model.loss_attention_rationales(att_scrores, rationale)
         loss.backward()
         optimizer.step()   
 
@@ -110,7 +113,7 @@ optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 
 # Training Loop
 for epoch in range(NUM_EPOCHS):
-    print(f"Epoch {epoch + 1}/{NUM_EPOCHS}")
+    print(f"Epoch {epoch + 1} / {NUM_EPOCHS}")
     train(model, train_dataloader, optimizer, device)
     accuracy, report = evaluate(model, val_dataloader, device)
     print(f"Validation Accuracy: {accuracy:.4f}")

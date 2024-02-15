@@ -26,11 +26,11 @@ class RationaleDataset(Dataset):
         # Encode the text
         encoding  = self.tokenizer(self.texts[idx], padding="max_length", max_length=1024, truncation=True)
         input_ids = encoding['input_ids']
-        print(f"text : {torch.tensor(input_ids, dtype=torch.int)}")
+        print(f"text : {torch.tensor(input_ids, dtype=torch.int64)}")
 
         return {
-            "input_ids": torch.tensor(input_ids, dtype=torch.int),
-            "label": torch.tensor(self.labels[idx], dtype=torch.int),
+            "input_ids": torch.tensor(input_ids, dtype=torch.int64),
+            "label": torch.tensor(self.labels[idx], dtype=torch.int64),
             #"rationales": rationale_mask
         }
     

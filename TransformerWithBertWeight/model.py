@@ -15,8 +15,6 @@ class InputEmbedding(nn.Module):
 
     def forward(self,x):
         print(f"Input shape to Embedding: {x.shape}")
-        print(f"input:{x}")
-        print(f"Input device {x.device}") 
         #out = self.embedding(x) * torch.sqrt(torch.Tensor([self.d_model]))
         out = self.embedding(x) * math.sqrt(self.d_model)
         print(f"Output shape of Embedding: {out.shape}")
@@ -44,7 +42,6 @@ class PositionalEncoding(nn.Module):
     
     def forward(self, x):
         print(f"Input shape to Positional Encoding: {x.shape}")
-        print(f"Input device {x.device}") 
         x = x + (self.encoding[:, :x.shape[1], :]).requires_grad_(False)
         return self.dropout(x)
 
@@ -141,9 +138,9 @@ class Encoder(nn.Module):
 
 class LinearLayer(nn.Module):
 
-    def __init__(self, d_model: int) -> None:
+    def __init__(self, d_model: int, num_class: int) -> None:
         super().__init__()
-        self.projection = nn.Linear(d_model,1)
+        self.projection = nn.Linear(d_model, num_class)
     
     def forward(self, x):
         return torch.log_softmax(self.projection(x), dim = -1)
@@ -174,8 +171,8 @@ class TransformerBertWeight(nn.Module):
         encoder = Encoder(d_model, mha, ff, dropout) # Create the 12th layer that trained on
         self.encoders.append(encoder)
 
-        #self.dense1 = nn.Linear(d_model, num_classes)
-        self.dense = LinearLayer(d_model)
+        self.dense = nn.Linear(d_model, num_classes)
+        #self.dense = LinearLayer(d_model)
     
     def forward(self, src):
         src = self.embed(src)
@@ -185,12 +182,12 @@ class TransformerBertWeight(nn.Module):
         
         print(f"Attention Score: {src.shape}")
         src = self.dense(src[:, -1, :])
+        print(f"logits shape: {src.shape}")
 
-        return src#, attention_score
-
+        return src
+    
     def loss_cross_entropy_softmax(self, x, truth):
 
-        print('Calculating loss_cross_entropy_softmax')
         print(f"output x {x.shape}, truth {truth.shape}")
         # Assuming x and truth are PyTorch tensors
         x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
@@ -218,49 +215,3 @@ class TransformerBertWeight(nn.Module):
     def linear(self, x):
         return self.linear_layer(x)
     
-    
-# Do not need a decoder block for text classification: Only for model to generate text
-# class Decoder(nn.Module):
-
-#     def __init__(self, self_attention, cross_attention, feed_forward, dropout: float) -> None:
-#         super().__init__()
-#         self.self_attention = self_attention
-#         self.cross_attention = cross_attention
-#         self.feed_forward = feed_forward
-#         self.sa_rc = ResidualConnection(dropout)  # The first residual connection to do for the self-attention layer
-#         self.ca_rc = ResidualConnection(dropout) # The second residual connection to do for the cross-attention layer
-#         self.ff_rc = ResidualConnection(dropout)  # The third residual connection to do for the feed-forward layer
-    
-
-#     def forward(self, x, encoder_output, src_mask, tgt_mask):
-#         x = self.sa_rc(x,lambda x: self.multi_attention_layer(x,x,x,src_mask))
-#         x = self.ca_rc(x,lambda x:self.multi_attention_layer(x,encoder_output,encoder_output,tgt_mask))
-#         x = self.ff_rc(x,self.feed_forward(x))
-#         return x
-    
-
-# class Transformer(nn.Module):
-
-#     def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbedding, tgt_embed: InputEmbedding, src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, linear_layer: LinearLayer) -> None:
-#         super().__init__()
-#         self.encoder = encoder
-#         self.decoder = decoder
-#         self.src_embed = src_embed
-#         self.tgt_embed = tgt_embed
-#         self.src_pos = src_pos
-#         self.tgt_pos = tgt_pos
-#         self.linear_layer = linear_layer
-
-#     def encode(self, src, src_mask):
-#         src = self.src_embed(src)
-#         src = self.src_pos(src)
-#         return self.encoder(src, src_mask)
-    
-#     def decode(self, encoder_output: torch.Tensor, src_mask, tgt, tgt_mask):
-#         tgt = self.tgt_embed(tgt)
-#         tgt = self.tgt_pos(tgt)
-#         return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
-    
-#     def linear(self, x):
-#         return self.linear_layer(x)
-
