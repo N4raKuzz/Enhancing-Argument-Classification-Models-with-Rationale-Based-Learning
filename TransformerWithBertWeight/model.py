@@ -155,15 +155,15 @@ class TransformerBertWeight(nn.Module):
         self.embed = input_embedding
         self.pos_enc = positional_encoding
 
-        # for i in range(11):
-        #     # Retrieve weights from encoder layer of BERT
-        #     bert_attention = bert_model.encoder.layer[i].attention
+        for i in range(11):
+            # Retrieve weights from encoder layer of BERT
+            bert_attention = bert_model.encoder.layer[i].attention
             
-        #     mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
-        #     ff = FeedForward(d_model, d_ff, dropout)# Create FeedForward layer
-        #     encoder = Encoder(d_model, mha, ff, dropout) # Create Encoder
-        #     encoder.requires_grad = False  # Freeze layer
-        #     self.encoders.append(encoder)
+            mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
+            ff = FeedForward(d_model, d_ff, dropout)# Create FeedForward layer
+            encoder = Encoder(d_model, mha, ff, dropout) # Create Encoder
+            encoder.requires_grad = False  # Freeze layer
+            self.encoders.append(encoder)
                                                                                                                                                                                                                                                                 
         bert_attention = bert_model.encoder.layer[11].attention
         mha = MultiHeadAttetion(d_model, num_heads, bert_attention, dropout) # Create a MultiHeadAttention layer using BERT weights
@@ -180,36 +180,19 @@ class TransformerBertWeight(nn.Module):
         for encoder in self.encoders:
             src = encoder(src)
         
+        attention_score = src.mean(dim=-1)
         print(f"Attention Score: {src.shape}")
         src = self.dense(src[:, -1, :])
         print(f"logits shape: {src.shape}")
 
-        return src
+        return [attention_score, src]
     
-    def loss_cross_entropy_softmax(self, x, truth):
+    def attention_loss(self, att, rationale):
 
-        print(f"output x {x.shape}, truth {truth.shape}")
-        # Assuming x and truth are PyTorch tensors
-        x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
-        x_exp = torch.exp(x_shift)
-        x_exp_sum = torch.sum(x_exp, dim=1, keepdim=True)  # Sum across columns for each row
-        y_tilde = x_exp / x_exp_sum
-        y_log = torch.log(y_tilde + 1e-9)
-
-        l = -torch.sum(truth * y_log)  # Loss
-
-        return l
-    
-    def loss_attention_rationales(self, x, rationale):
-
-        print('Calculating loss_attention_rationales')
-        x_shift = x - torch.max(x)  # Remove the Xmax to avoid overflow
-        x_exp = torch.exp(x_shift)
-        x_exp_sum = torch.sum(x_exp, dim=1, keepdim=True)  # Sum across columns for each row
-        y_tilde = x_exp / x_exp_sum
-        y_log = torch.log(y_tilde + 1e-9)
-
-        l = -torch.sum(rationale * y_log)  # Loss
+        print('Calculating Attention Losss')
+        print(f"Attention Score: {att.shape}")
+        print(f"Rationale Mask: {rationale}")
+        l = torch.sum(rationale * att)  # Loss
         return l
 
     def linear(self, x):
