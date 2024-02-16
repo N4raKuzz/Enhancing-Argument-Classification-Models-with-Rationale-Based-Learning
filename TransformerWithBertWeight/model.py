@@ -14,10 +14,10 @@ class InputEmbedding(nn.Module):
         self.embedding = torch.nn.Embedding(v_size, d_model)
 
     def forward(self,x):
-        print(f"Input shape to Embedding: {x.shape}")
+        # print(f"Input shape to Embedding: {x.shape}")
         #out = self.embedding(x) * torch.sqrt(torch.Tensor([self.d_model]))
         out = self.embedding(x) * math.sqrt(self.d_model)
-        print(f"Output shape of Embedding: {out.shape}")
+        # print(f"Output shape of Embedding: {out.shape}")
         return out
     
 class PositionalEncoding(nn.Module):
@@ -41,7 +41,7 @@ class PositionalEncoding(nn.Module):
         print(f"PosEnc device: {self.encoding.device}")
     
     def forward(self, x):
-        print(f"Input shape to Positional Encoding: {x.shape}")
+        # print(f"Input shape to Positional Encoding: {x.shape}")
         x = x + (self.encoding[:, :x.shape[1], :]).requires_grad_(False)
         return self.dropout(x)
 
@@ -64,7 +64,7 @@ class FeedForward(nn.Module):
         self.linear_2 = nn.Linear(d_ff,d_model) #W2 + Bias2
 
     def forward(self, x):
-        print(f"Input {x.shape} to FeedForward Layer")
+        # print(f"Input {x.shape} to FeedForward Layer")
         #FNN(x) = ReLU(0, xW1 + b1)W2 + b2
         return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
     
@@ -86,7 +86,7 @@ class MultiHeadAttetion(nn.Module):
 
     def forward(self,q,k,v,mask):
 
-        print(f"Query Key and Value:{q.shape} to Multi-head Attention Layer")
+        # print(f"Query Key and Value:{q.shape} to Multi-head Attention Layer")
 
         batch_size = q.size(0)
         # Apply the linear transformations and split into `head` heads
@@ -107,7 +107,7 @@ class MultiHeadAttetion(nn.Module):
         multihead = (attention_scores @ value).transpose(1, 2).contiguous().view(batch_size, -1, self.d_model)
         multihead = self.w_o(multihead)
 
-        print(f"Multi-head Attention output Score: {multihead.shape}")
+        # print(f"Multi-head Attention output Score: {multihead.shape}")
 
         return multihead
 
@@ -131,7 +131,7 @@ class Encoder(nn.Module):
         self.ff_rc = ResidualConnection(size, dropout)  # The second residual connection to do for the feed-forward layer
 
     def forward(self, x):
-        print(f"Input shape to Encoder: {x.shape}")
+        # print(f"Input shape to Encoder: {x.shape}")
         x = self.ma_rc(x, lambda x: self.multi_attention_layer(x,x,x,None))
         x = self.ff_rc(x, lambda x: self.feed_forward(x))
         return x
@@ -179,20 +179,23 @@ class TransformerBertWeight(nn.Module):
         src = self.pos_enc(src)
         for encoder in self.encoders:
             src = encoder(src)
-        
-        attention_score = src.mean(dim=-1)
-        print(f"Attention Score: {src.shape}")
+        attention_score = src
+        # print(f"Attention Score: {src.shape}")
         src = self.dense(src[:, -1, :])
-        print(f"logits shape: {src.shape}")
+        # print(f"logits shape: {src.shape}")
 
         return [attention_score, src]
     
     def attention_loss(self, att, rationale):
 
-        print('Calculating Attention Losss')
+        print('Calculating Attention Loss')
         print(f"Attention Score: {att.shape}")
+        epsilon = 1e-9
+        att = torch.log(att + epsilon)
+        att = att.mean(dim=-1)
         print(f"Rationale Mask: {rationale}")
         l = torch.sum(rationale * att)  # Loss
+        print(f"Loss: {l}")
         return l
 
     def linear(self, x):

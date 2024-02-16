@@ -27,12 +27,12 @@ class RationaleDataset(Dataset):
         rationale_mask = rationale_mask[:self.max_len] if len(rationale_mask) > self.max_len else rationale_mask
         rationale_mask = np.array([rationale_mask + [0 for _ in range(self.max_len - len(rationale_mask))]])
         rationale_mask = torch.tensor(rationale_mask, dtype=torch.int32)
-        print(f"Shape of rationale: {rationale_mask.shape}")
+        # print(f"Shape of rationale: {rationale_mask.shape}")
 
         # Encode the text
-        encoding  = self.tokenizer(self.texts[idx], padding="max_length", max_length=1024, truncation=True)
+        encoding  = self.tokenizer(self.texts[idx], padding="max_length", max_length=self.max_len, truncation=True)
         input_ids = encoding['input_ids']
-        print(f"text : {torch.tensor(input_ids, dtype=torch.int64)}")
+        # print(f"text : {torch.tensor(input_ids, dtype=torch.int64)}")
 
         return {
             "input_ids": torch.tensor(input_ids, dtype=torch.int64),
