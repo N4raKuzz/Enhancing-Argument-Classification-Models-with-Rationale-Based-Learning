@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # Model parameters
-FILE_PATH = "data\snippet.csv"
+FILE_PATH = "data\icml_imdb_small.csv"
 TOKENIZER_PATH = "tokenizer.json"
 NUM_CLASSES = 2  # Number of classes
 D_MODEL = 768  # Model dimension
@@ -20,10 +20,10 @@ D_FF = 2048  # Dimension of feed-forward network
 NUM_HEADS = 8  # Number of attention heads
 MAX_LEN = 256  # Maximum sequence length
 V_SIZE = 30522  # Size of vocabulary
-LEARNING_RATE = 1e-3 # Learning Rate
-NUM_EPOCHS = 1 # Number of epochs
+LEARNING_RATE = 1e-5 # Learning Rate
+NUM_EPOCHS = 8 # Number of epochs
 DROPOUT = 0.1 
-LAMBDA = 1
+LAMBDA = 0.6
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))
@@ -57,7 +57,7 @@ def train(model, data_loader, optimizer, device):
     model = model.to(device)
 
     for batch in data_loader:
-        print(f"Batch size: {len(batch['input_ids'])}")
+        # print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
         input_ids = batch['input_ids'].to(device)
         labels = batch['label'].to(device)
@@ -66,8 +66,9 @@ def train(model, data_loader, optimizer, device):
         att_scrores = outputs[0].to(device)
         results = outputs[1].to(device)
         CrossEntropyLoss = nn.CrossEntropyLoss()
-        #loss = CrossEntropyLoss(outputs, labels)
-        loss = LAMBDA * CrossEntropyLoss(results, labels) + (1-LAMBDA) * model.attention_loss(att_scrores, rationales)
+        loss = CrossEntropyLoss(results, labels)
+        # loss = LAMBDA * CrossEntropyLoss(results, labels) + (1-LAMBDA) * model.attention_loss(att_scrores, rationales)
+        # print(f"Total loss: {loss}")
         loss.backward()
         optimizer.step()   
 
@@ -108,8 +109,8 @@ print(f"Total validation samples: {len(val_dataset)}")
 model = TransformerBertWeight(NUM_CLASSES, D_MODEL, D_FF, input_embedding, positional_encoding, num_heads = NUM_HEADS, dropout = DROPOUT).to(device) 
 
 # Initializer Dataloader
-train_dataloader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-val_dataloader = DataLoader(val_dataset, batch_size=16)
+train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True)
+val_dataloader = DataLoader(val_dataset, batch_size=4)
 
 optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
 
@@ -122,4 +123,4 @@ for epoch in range(NUM_EPOCHS):
     print(report)
 
 # Save model
-torch.save(model.state_dict(), 'model\snippet.pth')
+torch.save(model.state_dict(), 'model\imdb_small.pth')

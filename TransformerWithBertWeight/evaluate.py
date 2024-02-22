@@ -21,9 +21,9 @@ NUM_EPOCHS = 1 # Number of epochs
 DROPOUT = 0.1 
 LAMBDA = 1
 FILE_PATH = "data\icml_imdb_small.csv"
-MODEL_PATH = "model\imdb_small.pth"
+MODEL_PATH = "model\imdb_small_r2.pth"
 # FILE_PATH = "data\icml_imdb_large.csv"
-# MODEL_PATH = "model\imdb_large.pth"
+# MODEL_PATH = "model\imdb_large_r2.pth"
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))

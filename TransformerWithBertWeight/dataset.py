@@ -13,7 +13,7 @@ class RationaleDataset(Dataset):
         self.tokenizer = tokenizer
 
     def __len__(self):
-        print(f"Dataset length: {len(self.texts)}")
+        # print(f"Dataset length: {len(self.texts)}")
         return len(self.texts)
 
     def __getitem__(self, idx):
@@ -42,7 +42,7 @@ class RationaleDataset(Dataset):
     
     def create_rationale_mask(self, rationales, texts):
 
-        mask = [0] * len(texts)
+        mask = [1] * len(texts)
 
         def matches_rationale(doc_index, rationale):
             if doc_index + len(rationale) > len(texts):
@@ -57,6 +57,6 @@ class RationaleDataset(Dataset):
             for rationale in rationales:
                 if matches_rationale(i, rationale):
                     for j in range(len(rationale)):
-                        mask[i + j] = 1
+                        mask[i + j] = -1
         
         return mask

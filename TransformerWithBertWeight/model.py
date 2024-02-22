@@ -37,8 +37,8 @@ class PositionalEncoding(nn.Module):
         # (1, seq_len 1024, d_model 768)
         self.encoding = self.encoding.unsqueeze(0) 
 
-        print(f"Encoding shape initialization: {self.encoding.shape}")
-        print(f"PosEnc device: {self.encoding.device}")
+        # print(f"Encoding shape initialization: {self.encoding.shape}")
+        # print(f"PosEnc device: {self.encoding.device}")
     
     def forward(self, x):
         # print(f"Input shape to Positional Encoding: {x.shape}")
@@ -188,14 +188,18 @@ class TransformerBertWeight(nn.Module):
     
     def attention_loss(self, att, rationale):
 
-        print('Calculating Attention Loss')
-        print(f"Attention Score: {att.shape}")
-        epsilon = 1e-9
-        att = torch.log(att + epsilon)
-        att = att.mean(dim=-1)
-        print(f"Rationale Mask: {rationale}")
-        l = torch.sum(rationale * att)  # Loss
-        print(f"Loss: {l}")
+        # print('Calculating Attention Loss')
+        # print(f"Attention Score shape: {att.shape}")
+        att = nn.functional.softmax(att, dim=1)
+        # print(f"Attention Score af softmax: {att}")
+        # print(f"Attention Score shape af softmax: {att.shape}")
+        att = torch.mean(att, dim=2)
+        # print(f"Attention Score af mean: {att}")
+        # print(f"Attention Score shape af mean: {att.shape}")
+        # print(f"Rationale Mask: {rationale.shape}")
+        l = torch.sum(rationale * att)
+        l = torch.log(l)
+        # print(f"Attention Loss: {l}")
         return l
 
     def linear(self, x):
