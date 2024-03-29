@@ -11,7 +11,7 @@ def load_dataset(filepath):
 def get_label_and_rationale(sentence):
     # The API endpoint and key placeholders
     api_url = "https://api.openai.com/v4/completions"
-    api_key = "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"
+    api_key = ""
 
     # Construct the prompt to send to the API
     # This is a simple template; you might need to adjust it based on your needs
