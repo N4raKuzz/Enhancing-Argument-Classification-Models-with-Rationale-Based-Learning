@@ -18,10 +18,10 @@ NUM_CLASSES = 2  # Number of classes
 D_MODEL = 768  # Model dimension
 D_FF = 2048  # Dimension of feed-forward network
 NUM_HEADS = 8  # Number of attention heads
-MAX_LEN = 256  # Maximum sequence length
+MAX_LEN = 128  # Maximum sequence length
 V_SIZE = 30522  # Size of vocabulary
 LEARNING_RATE = 1e-5 # Learning Rate
-NUM_EPOCHS = 2 # Number of epochs
+NUM_EPOCHS = 4 # Number of epochs
 DROPOUT = 0.1 
 LAMBDA = 0.6
 
@@ -39,19 +39,27 @@ def load_data(path):
 
     return topics, arguments, keypoints, stances, labels, rationales
 
+#TODO: rewrite this
 def evaluate(model, data_loader, device):
     model.eval()
     predictions = []
     actual_labels = []
     with torch.no_grad():
         for batch in data_loader:
-            input_ids = batch['input_ids'].to(device)  
-            labels = batch['label'].to(device)
-            outputs = model(input_ids)
+            # Evaluating on Topic - keypoints
+            # input_ids_tk = batch['input_ids_tk'].to(device)
+            # targets = batch['stance'].to(device)
+            # outputs = model(input_ids_tk)
+
+            # Evaluating on Argument - keypoints
+            input_ids_ak = batch['input_ids_ak'].to(device)
+            targets = batch['label'].to(device)
+            outputs = model(input_ids_ak)
+
             results = outputs[1].to(device)
             _, preds = torch.max(results, dim=1)
             predictions.extend(preds.cpu().tolist())
-            actual_labels.extend(labels.cpu().tolist())
+            actual_labels.extend(targets.cpu().tolist())
             
     return accuracy_score(actual_labels, predictions), classification_report(actual_labels, predictions, zero_division=0)
 
@@ -63,23 +71,23 @@ def train(model, data_loader, optimizer, device):
         # print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
         # Training on Topic - keypoints
-        input_ids_tk = batch['input_ids_tk'].to(device)
-        targets = batch['stance'].to(device)
-        outputs = model(input_ids_tk)
-        rationales = batch['rationales_tk'].to(device)
+        # input_ids_tk = batch['input_ids_tk'].to(device)
+        # targets = batch['stance'].to(device)
+        # outputs = model(input_ids_tk)
+        # rationales = batch['rationales_tk'].to(device)
 
         # Training on Argument - keypoints
-        # input_ids_ak = batch['input_ids_ak'].to(device)
-        # targets = batch['label'].to(device)
-        # outputs = model(input_ids_ak)
-        # rationales = batch['rationales_ak'].to(device)
+        input_ids_ak = batch['input_ids_ak'].to(device)
+        targets = batch['label'].to(device)
+        outputs = model(input_ids_ak)
+        rationales = batch['rationales_ak'].to(device)
         
         att_scrores = outputs[0].to(device)
 
         results = outputs[1].to(device)
         CrossEntropyLoss = nn.CrossEntropyLoss()
-        loss = CrossEntropyLoss(results, targets)
-        # loss = LAMBDA * CrossEntropyLoss(results, labels) + (1-LAMBDA) * model.attention_loss(att_scrores, rationales)
+        # loss = CrossEntropyLoss(results, targets)
+        loss = LAMBDA * CrossEntropyLoss(results, targets) + (1-LAMBDA) * model.attention_loss(att_scrores, rationales)
         # print(f"Total loss: {loss}")
         # loss_trend.append(loss.detach().cpu().numpy())
         loss.backward()
@@ -138,4 +146,4 @@ for epoch in range(NUM_EPOCHS):
     print(report)
 
 # Save model
-torch.save(model.state_dict(), 'model\imdb_large_r3.pth')
+torch.save(model.state_dict(), 'model\ibm_kpa_ak_r.pth')
