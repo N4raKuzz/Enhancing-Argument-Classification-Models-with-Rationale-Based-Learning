@@ -1,3 +1,9 @@
 
 *.pth
 *.png
+*plot.py
+*val.py
+*.yml
+*.json
+*.sh
+*.env

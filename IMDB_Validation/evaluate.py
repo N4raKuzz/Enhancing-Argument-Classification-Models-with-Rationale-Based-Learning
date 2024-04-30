@@ -17,10 +17,10 @@ MAX_LEN = 1024  # Maximum sequence length
 V_SIZE = 30522  # Size of vocabulary
 DROPOUT = 0.1 
 
-FILE_PATH = "data\snippet.csv"
-MODEL_PATH = "model\snippet.pth"
-# FILE_PATH = "data\icml_imdb_large.csv"
-# MODEL_PATH = "model\imdb_large_r2.pth"
+# FILE_PATH = "data\snippet.csv"
+# MODEL_PATH = "model\snippet.pth"
+FILE_PATH = "data\icml_imdb_large.csv"
+MODEL_PATH = "model\imdb_large.pth"
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))
@@ -90,8 +90,9 @@ train_texts, val_texts, train_labels, val_labels, train_rationales, val_rational
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 val_dataset = RationaleDataset(val_texts, val_labels, val_rationales, MAX_LEN, tokenizer)
 val_dataloader = DataLoader(val_dataset, batch_size = 16)
-#device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cpu")
+print(f"Total validation samples: {len(val_dataset)}")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 
 input_embedding = InputEmbedding(D_MODEL, V_SIZE).to(device) 
 positional_encoding = PositionalEncoding(D_MODEL, MAX_LEN, DROPOUT,device).to(device)

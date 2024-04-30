@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 
 # Model parameters
-FILE_PATH = "data\ArgKP-2021_dataset_2.csv"
+FILE_PATH = "data\ArgKP-2021_dataset_r.csv"
 NUM_CLASSES = 2  # Number of classes
 D_MODEL = 768  # Model dimension
 D_FF = 2048  # Dimension of feed-forward network
@@ -21,9 +21,9 @@ NUM_HEADS = 8  # Number of attention heads
 MAX_LEN = 128  # Maximum sequence length
 V_SIZE = 30522  # Size of vocabulary
 LEARNING_RATE = 1e-5 # Learning Rate
-NUM_EPOCHS = 4 # Number of epochs
+NUM_EPOCHS = 10 # Number of epochs
 DROPOUT = 0.1 
-LAMBDA = 0.6
+LAMBDA = 0.8
 
 def load_data(path):
     df = pd.read_csv(os.path.abspath(path))
@@ -34,8 +34,8 @@ def load_data(path):
     arguments = df['argument'].tolist()
     keypoints = df['key_point'].tolist()
     labels = df['label'].tolist()
-    stances = df['label'].tolist()
-    rationales = df['rationales'].tolist()
+    stances = df['stance'].tolist()
+    rationales = df['gpt_rationales'].tolist()
 
     return topics, arguments, keypoints, stances, labels, rationales
 
@@ -47,14 +47,14 @@ def evaluate(model, data_loader, device):
     with torch.no_grad():
         for batch in data_loader:
             # Evaluating on Topic - keypoints
-            # input_ids_tk = batch['input_ids_tk'].to(device)
-            # targets = batch['stance'].to(device)
-            # outputs = model(input_ids_tk)
+            input_ids_tk = batch['input_ids_tk'].to(device)
+            targets = batch['stance'].to(device)
+            outputs = model(input_ids_tk)
 
             # Evaluating on Argument - keypoints
-            input_ids_ak = batch['input_ids_ak'].to(device)
-            targets = batch['label'].to(device)
-            outputs = model(input_ids_ak)
+            # input_ids_ak = batch['input_ids_ak'].to(device)
+            # targets = batch['label'].to(device)
+            # outputs = model(input_ids_ak)
 
             results = outputs[1].to(device)
             _, preds = torch.max(results, dim=1)
@@ -71,16 +71,16 @@ def train(model, data_loader, optimizer, device):
         # print(f"Batch size: {len(batch['input_ids'])}")
         optimizer.zero_grad()
         # Training on Topic - keypoints
-        # input_ids_tk = batch['input_ids_tk'].to(device)
-        # targets = batch['stance'].to(device)
-        # outputs = model(input_ids_tk)
-        # rationales = batch['rationales_tk'].to(device)
+        input_ids_tk = batch['input_ids_tk'].to(device)
+        targets = batch['stance'].to(device)
+        outputs = model(input_ids_tk)
+        rationales = batch['rationales_tk'].to(device)
 
         # Training on Argument - keypoints
-        input_ids_ak = batch['input_ids_ak'].to(device)
-        targets = batch['label'].to(device)
-        outputs = model(input_ids_ak)
-        rationales = batch['rationales_ak'].to(device)
+        # input_ids_ak = batch['input_ids_ak'].to(device)
+        # targets = batch['label'].to(device)
+        # outputs = model(input_ids_ak)
+        # rationales = batch['rationales_ak'].to(device)
         
         att_scrores = outputs[0].to(device)
 
@@ -146,4 +146,4 @@ for epoch in range(NUM_EPOCHS):
     print(report)
 
 # Save model
-torch.save(model.state_dict(), 'model\ibm_kpa_ak_r.pth')
+torch.save(model.state_dict(), 'model\snippet.pth')

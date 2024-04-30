@@ -55,9 +55,9 @@ def load_data(path):
 
 # Process and save the data
 dataset_data = load_data(FILE_PATH)
-with open("alpaca-bitcoin-sentiment-dataset.json", "w") as f:
+with open("snippet.json", "w") as f:
    json.dump(dataset_data, f)
-data = load_dataset("json", data_files="alpaca-bitcoin-sentiment-dataset.json")
+data = load_dataset("json", data_files="snippet.json")
 
 # Initialize device
 device = torch.device("cuda")# if torch.cuda.is_initialized() else "cpu")
